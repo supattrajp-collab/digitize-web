@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบสแกนเอกสารอัจฉริยะ (V4 - Business Pitch)</title>
+    <!-- โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- โหลด Tesseract.js (AI สำหรับ OCR) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
+    <!-- โหลดฟอนต์ภาษาไทย (Sarabun) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+        #file-input { display: none; }
+        #loader-icon.hidden, #gemini-loader.hidden, #quality-loader.hidden { display: none; }
+        [hidden] { display: none !important; }
+
+        /* Styles for active tab */
+        .sidebar-link.active {
+            background-color: #047857; /* emerald-700 */
+            border-left-width: 4px;
+            border-color: #34d399; /* emerald-400 */
+            padding-left: 1.25rem; /* pl-5 */
+        }
+        
+        /* Styles for folder selection */
+        .folder-btn {
+            background-color: #f3f4f6; /* gray-100 */
+            border: 2px solid #d1d5db; /* gray-300 */
+            color: #374151; /* gray-700 */
+        }
+        .folder-btn.selected {
+            background-color: #ecfdf5; /* emerald-50 */
+            border-color: #10b981; /* emerald-500 */
+            color: #065f46; /* emerald-800 */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Auth Loading State -->
+    <div id="auth-container" class="flex items-center justify-center min-h-screen">
+        <div class="text-center p-8 bg-white rounded-lg shadow-xl">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 text-emerald-600 mx-auto animate-spin mb-4"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+            <h2 class="text-xl font-semibold text-gray-700">กำลังเชื่อมต่อระบบ...</h2>
+        </div>
+    </div>
+
+    <!-- Login Page (Feature 4) (Hidden by default) -->
+    <div id="login-page" hidden class="flex items-center justify-center min-h-screen bg-emerald-50">
+        <div class="m-auto p-10 bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div class="flex justify-center items-center space-x-3 mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-10 h-10 text-emerald-600"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                <h1 class="text-3xl font-bold text-emerald-800">Digitize System</h1>
+            </div>
+            <h2 class="text-xl font-semibold text-gray-700 text-center mb-6">กรุณาเข้าสู่ระบบ</h2>
+            <form id="login-form">
+                <div class="space-y-4">
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-700">ชื่อผู้ใช้</label>
+                        <input type="text" id="username" value="demo_user" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700">รหัสผ่าน</label>
+                        <input type="password" id="password" value="demo_pass" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500">
+                    </div>
+                    <button type="submit" id="login-button" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+                        เข้าสู่ระบบ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Dashboard Page (Feature 5) (Hidden by default) -->
+    <div id="dashboard-page" hidden class="min-h-screen bg-gray-100 p-8">
+        <header class="flex justify-between items-center mb-8">
+            <div class="flex items-center space-x-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-10 h-10 text-emerald-600"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                <h1 class="text-3xl font-bold text-emerald-800">Digitize Dashboard</h1>
+            </div>
+            <div class="text-right">
+                <div class="text-sm text-gray-500">User ID:</div>
+                <span id="user-id-dashboard" class="text-md font-medium text-gray-700 truncate">...</span>
+            </div>
+        </header>
+        
+        <!-- Dashboard Content -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Total Files Card -->
+            <div class="bg-white p-6 rounded-2xl shadow-lg flex items-center space-x-4 border-l-4 border-emerald-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 text-emerald-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700">จำนวนไฟล์ทั้งหมด</h3>
+                    <p class="text-4xl font-bold text-emerald-700">1,452</p>
+                    <p class="text-sm text-gray-500">(จำลองข้อมูล)</p>
+                </div>
+            </div>
+            
+            <!-- Go to App Button -->
+            <div class="col-span-1 md:col-span-2 bg-emerald-600 p-6 rounded-2xl shadow-lg flex flex-col justify-center items-center text-white hover:bg-emerald-700 transition-all cursor-pointer" id="go-to-app-button">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 mb-2"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
+                <h2 class="text-2xl font-bold">ไปที่หน้าจัดการเอกสาร</h2>
+                <p class="text-lg text-emerald-100">(Scan, Check & Manage)</p>
+            </div>
+        </div>
+
+        <!-- Scanner Status Section -->
+        <h2 class="text-2xl font-bold text-emerald-800 mb-4">สถานะการสแกนเอกสาร</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-2xl shadow-lg border-l-4 border-green-500">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-lg font-semibold text-gray-700">Scanner #1 (การเงิน)</h3>
+                    <span class="flex items-center text-sm font-medium text-green-600">
+                        <span class="h-3 w-3 bg-green-500 rounded-full mr-2"></span>
+                        Online
+                    </span>
+                </div>
+                <p class="text-gray-500">สถานะ: พร้อมใช้งาน</p>
+                <p class="text-gray-500 text-sm mt-2">IP: 192.168.1.10</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-lg border-l-4 border-blue-500">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-lg font-semibold text-gray-700">Scanner #2 (บุคคล)</h3>
+                    <span class="flex items-center text-sm font-medium text-blue-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                        Scanning
+                    </span>
+                </div>
+                <p class="text-gray-500">สถานะ: กำลังสแกน... (78%)</p>
+                <p class="text-gray-500 text-sm mt-2">IP: 192.168.1.11</p>
+            </div>
+            
+            <div class="bg-white p-6 rounded-2xl shadow-lg border-l-4 border-red-500">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-lg font-semibold text-gray-700">Scanner #3 (กฎหมาย)</h3>
+                    <span class="flex items-center text-sm font-medium text-red-600">
+                        <span class="h-3 w-3 bg-red-500 rounded-full mr-2"></span>
+                        Offline
+                    </span>
+                </div>
+                <p class="text-gray-500">สถานะ: ไม่พบการเชื่อมต่อ</p>
+                <p class="text-gray-500 text-sm mt-2">IP: 192.168.1.12</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container (Feature 6) (Hidden by default) -->
+    <div id="app-container" hidden class="flex h-screen">
+        
+        <!-- Sidebar -->
+        <nav id="sidebar" class="w-64 bg-emerald-800 text-white flex flex-col shadow-lg">
+            <!-- Logo -->
+            <div class="flex items-center justify-center space-x-3 p-6 shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-emerald-300"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                <h1 class="text-xl font-bold">Digitize</h1>
+            </div>
+            
+            <!-- Menu -->
+            <div class="flex-grow mt-6 space-y-2">
+                <a href="#" class="sidebar-link active flex items-center space-x-3 px-6 py-3 hover:bg-emerald-700 transition-colors" data-tab="ocr">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
+                    <span>สแกนและตรวจสอบ</span>
+                </a>
+                <a href="#" class="sidebar-link flex items-center space-x-3 px-6 py-3 hover:bg-emerald-700 transition-colors" data-tab="files">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    <span>คลังเอกสาร (Files)</span>
+                </a>
+                <a href="#" class="sidebar-link flex items-center space-x-3 px-6 py-3 hover:bg-emerald-700 transition-colors" data-tab="dashboard-return">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    <span>กลับหน้า Dashboard</span>
+                </a>
+            </div>
+            
+            <!-- User Info -->
+            <div class="p-4 border-t border-emerald-700">
+                <div class="bg-emerald-900 text-emerald-100 text-sm px-4 py-2 rounded-lg shadow-inner">
+                    <strong>Logged in as:</strong>
+                    <span id="user-id-app" class="block truncate">...</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="flex-grow p-6 md:p-10 overflow-y-auto">
+
+            <!-- Tab 1: OCR & Quality Check (Feature 6.1) -->
+            <section id="ocr-section" class="tab-content">
+                <div class="bg-white p-8 rounded-2xl shadow-xl max-w-5xl mx-auto space-y-10">
+                    <!-- Section: Upload -->
+                    <section id="upload-section">
+                        <h2 class="text-2xl font-semibold text-emerald-800 mb-4">สแกนเอกสารใหม่</h2>
+                        <div id="drop-zone" class="border-4 border-dashed border-emerald-300 bg-emerald-50 rounded-lg p-10 text-center cursor-pointer hover:bg-emerald-100 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 text-emerald-500 mx-auto mb-4"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
+                            <!-- (EDIT 1) Updated text for multi-file -->
+                            <h2 class="text-xl font-semibold text-emerald-800">วางไฟล์ (หรือหลายไฟล์) ที่นี่</h2>
+                            <p class="text-emerald-700">หรือ คลิกเพื่อเลือกไฟล์จากเครื่อง</p>
+                            <!-- (EDIT 2) Added 'multiple' attribute -->
+                            <input type="file" id="file-input" accept="image/png, image/jpeg, image/bmp" multiple>
+                        </div>
+                    </section>
+
+                    <!-- Section: Preview & Quality Check -->
+                    <section id="preview-section" class="hidden">
+                        <div class="md:flex md:space-x-8">
+                            <!-- (EDIT 3) Replaced single image preview with multi-file list -->
+                            <div class="md:w-1/2">
+                                <h3 class="text-lg font-semibold text-emerald-800 mb-2">
+                                    ไฟล์ที่เลือก: 
+                                    <span id="file-count" class="font-bold text-emerald-600">0</span> ไฟล์
+                                </h3>
+                                <div id="preview-grid" class="mt-2 h-48 overflow-y-auto bg-gray-50 border rounded-lg p-3 space-y-2">
+                                    <!-- File previews will be injected here by JS -->
+                                </div>
+                            </div>
+                            <!-- (NEW) Quality Checking (Feature 6.1) -->
+                            <div class="md:w-1/2 mt-6 md:mt-0">
+                                <!-- (EDIT 4) Added file count span -->
+                                <h3 class="text-lg font-semibold text-emerald-800 mb-2">
+                                    วิเคราะห์คุณภาพไฟล์ (Mock-up) 
+                                    <span id="quality-check-file-count" class="text-base font-medium text-gray-500"></span>
+                                </h3>
+                                <button id="quality-check-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-all flex items-center justify-center space-x-2 disabled:opacity-50">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="m10 13 2 2 4-4"></path></svg>
+                                    <span>เริ่มตรวจสอบคุณภาพ</span>
+                                </button>
+                                <div id="quality-check-results" class="hidden mt-4 bg-gray-100 p-4 rounded-lg space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700 font-medium">ความชัดเจน (Clarity):</span>
+                                        <span class="font-bold text-green-600">95% (ดีมาก)</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700 font-medium">ความเอียง (Skew):</span>
+                                        <span class="font-bold text-red-600">1.5° (ต้องแก้ไข)</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700 font-medium">ขอบมืด (Vignette):</span>
+                                        <span class="font-bold text-green-600">ไม่มี</span>
+                                    </div>
+                                    <div class="flex gap-2 mt-2">
+                                        <button class="text-sm bg-indigo-500 text-white py-1 px-3 rounded-md hover:bg-indigo-600">แก้ไขอัตโนมัติ (Mock)</button>
+                                        <button class="text-sm bg-gray-500 text-white py-1 px-3 rounded-md hover:bg-gray-600">ดำเนินการต่อ</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- (EDIT 5) Added AI Quality Summary Mock-up -->
+                                <div id="ai-quality-summary" class="hidden mt-4 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg space-y-2">
+                                    <h4 class="text-md font-semibold text-blue-800">สรุปโดย AI (Mock-up)</h4>
+                                    <ul class="list-disc list-inside text-sm text-blue-700 space-y-1">
+                                        <li>ไฟล์ 1 (Invoice.png): <span class="font-medium">ชัดเจน, เอียงเล็กน้อย</span></li>
+                                        <li>ไฟล์ 2 (Contract.png): <span class="font-medium text-red-600">ไม่ชัด (เบลอ)</span></li>
+                                        <li>ไฟล์ 3 (Memo.png): <span class="font-medium">ชัดเจน, ตรง</span></li>
+                                    </ul>
+                                    <p class="text-sm font-medium text-blue-800">คำแนะนำ: ควรดำเนินการต่อ 2 ไฟล์ และสแกนไฟล์ "Contract.png" ใหม่</p>
+                                </div>
+                                
+                                <!-- OCR Button (Moved here) -->
+                                <h3 class="text-lg font-semibold text-emerald-800 mb-2 mt-6">ประมวลผล AI (OCR)</h3>
+                                <button id="ocr-button" class="w-full bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2 disabled:opacity-50">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                                    <span>เริ่มประมวลผล OCR</span>
+                                </button>
+                                <div class="mt-4 bg-gray-100 p-4 rounded-lg">
+                                    <div class="flex items-center">
+                                        <svg id="loader-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-emerald-600 mr-2 animate-spin hidden"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                                        <span id="status-message" class="text-gray-700" role="status">รอการดำเนินการ...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Section: Results & Storage (Feature 6.2, 6.3) -->
+                    <section id="results-container" class="mt-8 hidden">
+                        <h3 class="text-xl font-semibold text-emerald-800 mb-3">ข้อความที่ดึงได้ (OCR)</h3>
+                        <textarea id="ocr-result" rows="10" class="w-full p-4 border border-emerald-300 rounded-lg shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white" placeholder="ข้อความที่สแกนได้จะปรากฏที่นี่..."></textarea>
+                        
+                        <!-- (NEW) Folder Storage (Feature 6.3) -->
+                        <div class="mt-6">
+                            <label class="block text-lg font-semibold text-emerald-800 mb-2">จำแนกไฟล์และจัดเก็บ (ข้อ 6.2)</label>
+                            <p class="text-sm text-gray-600 mb-3">เลือกโฟลเดอร์ตามกระบวนการทำงานของฝ่าย</p>
+                            <div id="folder-selection" class="flex flex-wrap gap-3">
+                                <button class="folder-btn font-medium py-2 px-4 rounded-lg flex items-center space-x-2" data-folder="ใบแจ้งหนี้">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                                    <span>การเงิน: ใบแจ้งหนี้</span>
+                                </button>
+                                <button class="folder-btn font-medium py-2 px-4 rounded-lg flex items-center space-x-2" data-folder="สัญญาจ้าง">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                    <span>บุคคล: สัญญาจ้าง</span>
+                                </button>
+                                <button class="folder-btn font-medium py-2 px-4 rounded-lg flex items-center space-x-2" data-folder="เอกสารเข้า">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                                    <span>ทั่วไป: เอกสารเข้า</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- AI Classify (Add-on) -->
+                        <div class="mt-6">
+                            <label class="block text-lg font-semibold text-emerald-800 mb-2">AI ช่วยคัดแยก (ตัวเสริม)</label>
+                            <button id="ai-classify-button" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 transition-all flex items-center justify-center space-x-2 w-full md:w-auto">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 3a6.364 6.364 0 0 0 9 9 9 9 0 1 1-9-9Z"></path><path d="M12 3v.01"></path><path d="m21.03 12.5.01-.01"></path><path d="M3.97 12.5S4 12.49 4 12.5"></path><path d="M12 21v-.01"></path><path d="M8.03 6.25 8 6.26"></path><path d="m16 6.25.03.01"></path><path d="M8 17.75l.03-.01"></path><path d="m16 17.75-.03-.01"></path></svg>
+                                <span>AI ช่วยเลือกโฟลเดอร์</span>
+                                <svg id="gemini-loader" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 ml-2 animate-spin hidden"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                            </button>
+                            <span id="gemini-status" class="text-sm text-gray-600 mt-1"></span>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-4 mt-8">
+                            <button id="save-button" class="bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                                <span>บันทึกเอกสาร</span>
+                            </button>
+                            <button id="copy-button" class="bg-gray-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-gray-700 transition-colors">
+                                คัดลอกข้อความ
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <!-- Tab 2: File Management (Feature 6.2, 6.3) -->
+            <section id="files-section" class="tab-content hidden">
+                <div class="bg-white p-8 rounded-2xl shadow-xl max-w-5xl mx-auto space-y-10">
+                    <section id="search-section">
+                        <h2 class="text-2xl font-semibold text-emerald-800 mb-4">คลังเอกสาร (ค้นหา)</h2>
+                        
+                        <!-- (NEW) Filter by Workflow Folder (Feature 6.3) -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">กรองตามโฟลเดอร์:</label>
+                            <div id="category-filter-buttons" class="flex flex-wrap gap-2">
+                                <button class="category-filter-btn active bg-emerald-600 text-white font-semibold py-2 px-4 rounded-full text-sm" data-category="ทั้งหมด">ทั้งหมด</button>
+                                <button class="category-filter-btn bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-full text-sm hover:bg-gray-300" data-category="ใบแจ้งหนี้">ใบแจ้งหนี้</button>
+                                <button class="category-filter-btn bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-full text-sm hover:bg-gray-300" data-category="สัญญาจ้าง">สัญญาจ้าง</button>
+                                <button class="category-filter-btn bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-full text-sm hover:bg-gray-300" data-category="เอกสารเข้า">เอกสารเข้า</button>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <input type="text" id="search-input" placeholder="ค้นหาจากชื่อไฟล์ หรือ เนื้อหา..." class="flex-grow w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-emerald-500 focus:border-emerald-500">
+                            <button id="search-button" class="bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                <span>ค้นหา</span>
+                            </button>
+                        </div>
+                        <div id="search-status" class="mt-2 text-gray-600"></div>
+                        <div id="search-results" class="mt-4 space-y-3">
+                            <!-- Search results will be injected here -->
+                        </div>
+                    </section>
+                    
+                    <!-- (EDIT 6) Added Folder Browser Mock-up -->
+                    <section id="folder-browser-section" class="mt-10">
+                        <h2 class="text-2xl font-semibold text-emerald-800 mb-4">โฟลเดอร์ทั้งหมด (Mock-up)</h2>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <!-- Mock Folder 1 -->
+                            <div class="flex flex-col items-center justify-center p-4 bg-gray-50 border-2 border-gray-200 rounded-lg hover:shadow-md hover:bg-white cursor-pointer transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 text-emerald-500"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                <span class="mt-2 font-medium text-gray-700">ใบแจ้งหนี้</span>
+                            </div>
+                            <!-- Mock Folder 2 -->
+                            <div class="flex flex-col items-center justify-center p-4 bg-gray-50 border-2 border-gray-200 rounded-lg hover:shadow-md hover:bg-white cursor-pointer transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 text-emerald-500"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                <span class="mt-2 font-medium text-gray-700">สัญญาจ้าง</span>
+                            </div>
+                            <!-- Mock Folder 3 -->
+                            <div class="flex flex-col items-center justify-center p-4 bg-gray-50 border-2 border-gray-200 rounded-lg hover:shadow-md hover:bg-white cursor-pointer transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 text-emerald-500"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                <span class="mt-2 font-medium text-gray-700">เอกสารเข้า</span>
+                            </div>
+                            <!-- Mock Folder 4 -->
+                            <div class="flex flex-col items-center justify-center p-4 bg-gray-100 border-2 border-gray-300 rounded-lg hover:shadow-md hover:bg-white cursor-pointer transition-all text-gray-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                <span class="mt-2 font-medium">อื่นๆ...</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script type="module">
+        // --- Firebase (Feature 4, 6) ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, collection, getDocs, query, where, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Tesseract (Feature 3) ---
+        // Tesseract.js is loaded via <script> tag in <head>
+        
+        // --- Element Getters ---
+        const authContainer = document.getElementById('auth-container');
+        const loginPage = document.getElementById('login-page');
+        const loginForm = document.getElementById('login-form');
+        
+        // (NEW) Dashboard Page (Feature 5)
+        const dashboardPage = document.getElementById('dashboard-page');
+        const userIdDashboard = document.getElementById('user-id-dashboard');
+        const goToAppButton = document.getElementById('go-to-app-button');
+
+        // Main App
+        const appContainer = document.getElementById('app-container');
+        const userIdApp = document.getElementById('user-id-app');
+        
+        const sidebar = document.getElementById('sidebar');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        // OCR Tab
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewSection = document.getElementById('preview-section');
+        
+        // (EDIT 7) Updated element getters for multi-file
+        const previewGrid = document.getElementById('preview-grid');
+        const fileCount = document.getElementById('file-count');
+        
+        // (NEW) Quality Check (Feature 6.1)
+        const qualityCheckButton = document.getElementById('quality-check-button');
+        const qualityCheckResults = document.getElementById('quality-check-results');
+        const qualityCheckFileCount = document.getElementById('quality-check-file-count'); // (EDIT 8)
+        const aiQualitySummary = document.getElementById('ai-quality-summary'); // (EDIT 9)
+
+        const ocrButton = document.getElementById('ocr-button');
+        const statusMessage = document.getElementById('status-message');
+        const loaderIcon = document.getElementById('loader-icon');
+        
+        const resultsContainer = document.getElementById('results-container');
+        const ocrResult = document.getElementById('ocr-result');
+        const copyButton = document.getElementById('copy-button');
+
+        // (NEW) Folder Storage (Feature 6.3)
+        const folderSelection = document.getElementById('folder-selection');
+        
+        const aiClassifyButton = document.getElementById('ai-classify-button');
+        const geminiLoader = document.getElementById('gemini-loader');
+        const geminiStatus = document.getElementById('gemini-status');
+        const saveButton = document.getElementById('save-button');
+        
+        // Files Tab
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const searchResults = document.getElementById('search-results');
+        const searchStatus = document.getElementById('search-status');
+        const categoryFilterButtons = document.getElementById('category-filter-buttons');
+
+        // --- Global State ---
+        // (EDIT 10) Changed to handle multiple files
+        let currentFiles = [];
+        let ocrWorker = null;
+        let db, auth;
+        let userId = null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        let activeCategoryFilter = 'ทั้งหมด'; // For file management
+        let selectedFolder = null; // (NEW) For storage
+
+        // --- Firebase Init & Auth (Feature 4) ---
+        try {
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    console.log("User is signed in:", user.uid);
+                    userId = user.uid;
+                    userIdDashboard.textContent = userId; // (NEW) Set dashboard User ID
+                    userIdApp.textContent = userId;       // Set app User ID
+                    
+                    // (NEW) Show LOGIN PAGE first
+                    loginPage.removeAttribute('hidden');
+                    authContainer.setAttribute('hidden', 'true');
+                    dashboardPage.setAttribute('hidden', 'true'); 
+                    appContainer.setAttribute('hidden', 'true'); 
+                } else {
+                    console.log("User is not signed in, attempting auth...");
+                    userId = null;
+                    appContainer.setAttribute('hidden', 'true');
+                    loginPage.setAttribute('hidden', 'true');
+                    dashboardPage.setAttribute('hidden', 'true');
+                    authContainer.removeAttribute('hidden');
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Auth Error:", error);
+                        authContainer.innerHTML = `<h2 class="text-xl font-semibold text-red-600">เกิดข้อผิดพลาดในการเชื่อมต่อ: ${error.message}</h2>`;
+                    }
+                }
+            });
+        } catch (e) {
+            console.error("Firebase Init Error:", e);
+            authContainer.innerHTML = `<h2 class="text-xl font-semibold text-red-600">ไม่สามารถเริ่มต้น Firebase ได้</h2><p class="text-gray-600">${e.message}</p>`;
+        }
+
+        // --- (NEW) Flow Logic (Feature 4 -> 5 -> 6) ---
+        // 1. Login
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            // Mock login: Hide login, show dashboard
+            loginPage.setAttribute('hidden', 'true');
+            dashboardPage.removeAttribute('hidden');
+            
+            // TODO: Here you would ideally fetch the "Total Files" count
+            // For now, it's mocked in HTML
+        });
+
+        // 2. Dashboard to App
+        goToAppButton.addEventListener('click', async () => {
+            // Hide dashboard, show main app
+            dashboardPage.setAttribute('hidden', 'true');
+            appContainer.removeAttribute('hidden'); // Use removeAttribute
+            appContainer.classList.add('flex'); // Ensure flex is on
+
+            // Pre-load Tesseract worker & documents *now*
+            initializeWorker(); 
+            await searchDocuments(); 
+        });
+
+        // 3. Return to Dashboard
+        sidebar.querySelector('[data-tab="dashboard-return"]').addEventListener('click', (e) => {
+            e.preventDefault();
+            appContainer.setAttribute('hidden', 'true');
+            dashboardPage.removeAttribute('hidden');
+        });
+
+
+        // --- Tab Switching Logic (Main App) ---
+        sidebar.addEventListener('click', (e) => {
+            const link = e.target.closest('.sidebar-link');
+            if (!link || link.dataset.tab === 'dashboard-return') return;
+            
+            e.preventDefault();
+            const tab = link.dataset.tab;
+            
+            // Hide all content
+            tabContents.forEach(content => content.classList.add('hidden'));
+            
+            // Deactivate all links
+            sidebar.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+
+            // Show selected content
+            document.getElementById(tab + '-section').classList.remove('hidden');
+            
+            // Activate selected link
+            link.classList.add('active');
+        });
+
+
+        // --- Tesseract OCR Logic (Feature 3) ---
+        // (EDIT 11) Updated function to handle FileList
+        function handleFileSelect(files) {
+            if (files.length === 0) {
+                updateStatus('ข้อผิดพลาด: ไม่พบไฟล์', true);
+                return;
+            }
+            
+            // Check if any file is not an image
+            const notImages = Array.from(files).some(file => !file.type.startsWith('image/'));
+            if (notImages) {
+                updateStatus('ข้อผิดพลาด: กรุณาเลือกไฟล์รูปภาพเท่านั้น', true);
+                return;
+            }
+
+            currentFiles = Array.from(files);
+            
+            // Update UI
+            fileCount.textContent = `${currentFiles.length} ไฟล์`;
+            previewGrid.innerHTML = ""; // Clear previous previews
+            
+            // Populate preview grid with file names
+            currentFiles.forEach(file => {
+                const fileEl = document.createElement('div');
+                fileEl.className = "flex items-center space-x-2 bg-white p-2 rounded border";
+                fileEl.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-gray-500 flex-shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                            <span class="text-sm text-gray-700 truncate">${file.name}</span>
+                `;
+                previewGrid.appendChild(fileEl);
+            });
+            
+            previewSection.classList.remove('hidden');
+            
+            // Reset state
+            qualityCheckButton.disabled = false;
+            qualityCheckResults.classList.add('hidden');
+            aiQualitySummary.classList.add('hidden'); // (EDIT 12) Hide AI summary on new upload
+            qualityCheckFileCount.textContent = ""; // (EDIT 13) Reset file count
+            ocrButton.disabled = false;
+            resultsContainer.classList.add('hidden');
+            ocrResult.value = '';
+            updateStatus('พร้อมสำหรับตรวจสอบคุณภาพ');
+        }
+
+        function updateStatus(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.classList.toggle('text-red-600', isError);
+            
+            if(isError) {
+                 loaderIcon.classList.add('hidden');
+            } else {
+                if (message.includes('...')) {
+                     loaderIcon.classList.remove('hidden');
+                } else {
+                     loaderIcon.classList.add('hidden');
+                }
+            }
+        }
+        
+        async function initializeWorker() {
+            if (!ocrWorker) {
+                updateStatus('กำลังเริ่มต้น AI (ครั้งแรก)...');
+                ocrWorker = await Tesseract.createWorker(); 
+                updateStatus('กำลังโหลดโมเดลภาษา (ไทย)...');
+                await ocrWorker.loadLanguage('tha+eng');
+                await ocrWorker.initialize('tha+eng');
+                updateStatus('AI (OCR) พร้อมแล้ว');
+            }
+            return ocrWorker;
+        }
+        
+        // (NEW) Quality Check Mock (Feature 6.1)
+        qualityCheckButton.addEventListener('click', () => {
+            qualityCheckButton.disabled = true;
+            updateStatus('กำลังวิเคราะห์คุณภาพไฟล์ (Mock)...');
+            
+            // (EDIT 14) Update file count in quality check
+            qualityCheckFileCount.textContent = `(${currentFiles.length} ไฟล์)`;
+
+            // Simulate check
+            setTimeout(() => {
+                qualityCheckResults.classList.remove('hidden');
+                aiQualitySummary.classList.remove('hidden'); // (EDIT 15) Show AI Summary
+                updateStatus('วิเคราะห์คุณภาพสำเร็จ');
+                qualityCheckButton.disabled = false;
+            }, 1000);
+        });
+
+
+        async function performOCR() {
+            // (EDIT 16) Check length and process only the first file
+            if (currentFiles.length === 0) return;
+            
+            ocrButton.disabled = true;
+            resultsContainer.classList.add('hidden');
+            updateStatus(`กำลังเตรียมประมวลผล OCR (ไฟล์ 1 จาก ${currentFiles.length})...`);
+            try {
+                const worker = await initializeWorker();
+                updateStatus(`กำลังประมวลผล: ${currentFiles[0].name}...`);
+                const { data: { text } } = await worker.recognize(currentFiles[0]); // Process only the first file
+                updateStatus('ประมวลผล OCR สำเร็จ!');
+                ocrResult.value = text;
+                resultsContainer.classList.remove('hidden');
+            } catch (error) {
+                console.error(error);
+                updateStatus('เกิดข้อผิดพลาดระหว่างการประมวลผล OCR', true);
+            } finally {
+                ocrButton.disabled = false;
+            }
+        }
+        
+        // (NEW) Folder Selection Logic (Feature 6.3)
+        folderSelection.addEventListener('click', (e) => {
+            const button = e.target.closest('.folder-btn');
+            if (!button) return;
+            
+            // Remove selected from all
+            folderSelection.querySelectorAll('.folder-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            
+            // Add selected to clicked
+            button.classList.add('selected');
+            selectedFolder = button.dataset.folder;
+            geminiStatus.textContent = ""; // Clear AI status
+        });
+        
+        
+        // --- Gemini AI Classification (Feature 3 Add-on) ---
+        async function callGeminiForClassification() {
+            const text = ocrResult.value;
+            if (!text || text.trim().length < 10) {
+                geminiStatus.textContent = "ข้อความสั้นเกินไปสำหรับ AI";
+                return;
+            }
+
+            aiClassifyButton.disabled = true;
+            geminiLoader.classList.remove('hidden');
+            geminiStatus.textContent = "กำลังส่งให้ AI วิเคราะห์...";
+
+            const folders = Array.from(folderSelection.querySelectorAll('.folder-btn')).map(btn => btn.dataset.folder);
+            const systemPrompt = `คุณคือผู้ช่วยสำนักงานที่เชี่ยวชาญการคัดแยกเอกสาร
+จงวิเคราะห์ข้อความต่อไปนี้ และระบุว่าเอกสารนี้ควรจัดอยู่ในโฟลเดอร์ใด
+โฟลเดอร์ที่มีให้เลือก: ${folders.join(', ')}
+จงตอบเฉพาะชื่อโฟลเดอร์ที่ตรงที่สุด *เพียงคำเดียว* เท่านั้น (เช่น "ใบแจ้งหนี้", "สัญญาจ้าง", "เอกสารเข้า")`;
+
+            try {
+                const resultText = await getGeminiResponse(systemPrompt, text);
+                const matchedFolder = folders.find(folder => resultText.includes(folder));
+                
+                if (matchedFolder) {
+                    // (NEW) Select the button
+                    folderSelection.querySelectorAll('.folder-btn').forEach(btn => {
+                        btn.classList.toggle('selected', btn.dataset.folder === matchedFolder);
+                    });
+                    selectedFolder = matchedFolder;
+                    geminiStatus.textContent = `AI แนะนำ: ${matchedFolder}`;
+                } else {
+                    geminiStatus.textContent = `AI ตอบกลับ: ${resultText} (ไม่ตรงกับโฟลเดอร์)`;
+                }
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                geminiStatus.textContent = "เกิดข้อผิดพลาดในการเรียก AI";
+            } finally {
+                aiClassifyButton.disabled = false;
+                geminiLoader.classList.add('hidden');
+            }
+        }
+
+        // --- Gemini API Helper ---
+        async function getGeminiResponse(systemPrompt, userQuery) {
+            const apiKey = ""; // Kept as-is
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { temperature: 0.1, maxOutputTokens: 50 }
+            };
+            
+            let response;
+            let retries = 3;
+            let delay = 1000;
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        const result = await response.json();
+                        const candidate = result.candidates?.[0];
+                        if (candidate && candidate.content?.parts?.[0]?.text) {
+                            return candidate.content.parts[0].text.trim();
+                        }
+                    }
+                    console.warn(`API call attempt ${i + 1} failed with status: ${response.status}`);
+                } catch (error) {
+                    console.warn(`API call attempt ${i + 1} network error:`, error);
+                }
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Exponential backoff
+            }
+            throw new Error("ล้มเหลวในการเรียก API หลังจากพยายามหลายครั้ง");
+        }
+
+        // --- Firestore Save (Feature 6.2) ---
+        async function saveDocument() {
+            // (EDIT 17) Check length
+            if (!userId || currentFiles.length === 0) {
+                updateStatus("กรุณาเลือกไฟล์ก่อน", true);
+                return;
+            }
+            if (!selectedFolder) {
+                updateStatus("กรุณาเลือกโฟลเดอร์สำหรับจัดเก็บ", true);
+                return;
+            }
+            
+            saveButton.disabled = true;
+            updateStatus("กำลังบันทึกเอกสาร...", false);
+            loaderIcon.classList.remove('hidden');
+
+            try {
+                const docData = {
+                    // (EDIT 18) Save based on the first file
+                    fileName: currentFiles[0].name,
+                    ocrText: ocrResult.value,
+                    category: selectedFolder, // (NEW) Use folder name as category
+                    createdAt: new Date().toISOString(),
+                    userId: userId
+                };
+                const collectionPath = `/artifacts/${appId}/users/${userId}/documents`;
+                await addDoc(collection(db, collectionPath), docData);
+                
+                updateStatus("บันทึกเอกสารสำเร็จ!", false);
+                loaderIcon.classList.add('hidden');
+                
+                // Reset form
+                previewSection.classList.add('hidden');
+                resultsContainer.classList.add('hidden');
+                // (EDIT 19) Reset multi-file UI
+                currentFiles = [];
+                previewGrid.innerHTML = "";
+                fileCount.textContent = "0 ไฟล์";
+                folderSelection.querySelectorAll('.folder-btn').forEach(btn => btn.classList.remove('selected'));
+                selectedFolder = null;
+                
+                // Refresh search results
+                searchDocuments();
+
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                updateStatus("เกิดข้อผิดพลาดในการบันทึก", true);
+            } finally {
+                saveButton.disabled = false;
+            }
+        }
+        
+        // --- Firestore Search (Feature 6.2) ---
+        async function searchDocuments() {
+            if (!userId) return;
+
+            searchStatus.textContent = "กำลังโหลดเอกสาร...";
+            searchResults.innerHTML = "";
+            const searchTerm = searchInput.value.toLowerCase().trim();
+
+            try {
+                const collectionPath = `/artifacts/${appId}/users/${userId}/documents`;
+                const q = query(collection(db, collectionPath));
+                const querySnapshot = await getDocs(q);
+
+                let foundDocs = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    data.id = doc.id;
+
+                    // Filter logic
+                    const termMatch = !searchTerm || 
+                                      data.fileName.toLowerCase().includes(searchTerm) || 
+                                      data.ocrText.toLowerCase().includes(searchTerm);
+                    
+                    const categoryMatch = activeCategoryFilter === 'ทั้งหมด' || 
+                                          data.category === activeCategoryFilter;
+
+                    if (termMatch && categoryMatch) {
+                        foundDocs.push(data);
+                    }
+                });
+
+                searchStatus.textContent = `พบ ${foundDocs.length} เอกสาร (ฟิลเตอร์: ${activeCategoryFilter})`;
+                displaySearchResults(foundDocs);
+
+            } catch (error) {
+                console.error("Error searching documents: ", error);
+                searchStatus.textContent = `เกิดข้อผิดพลาดในการค้นหา: ${error.message}`;
+            }
+        }
+        
+        function displaySearchResults(docs) {
+            searchResults.innerHTML = "";
+            if (docs.length === 0) {
+                searchResults.innerHTML = `<p class="text-gray-500 italic">ไม่พบเอกสารที่ตรงกัน</p>`;
+                return;
+            }
+
+            docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            docs.forEach(doc => {
+                const el = document.createElement('div');
+                el.className = "p-4 border border-gray-200 rounded-lg bg-gray-50 hover:bg-white shadow-sm";
+                el.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-lg font-semibold text-emerald-700">${doc.fileName}</h4>
+                        <span class="text-sm font-medium text-white bg-emerald-500 px-3 py-1 rounded-full">${doc.category}</span>
+                    </div>
+                    <p class="text-gray-600 mt-2 text-sm truncate">${doc.ocrText.substring(0, 150)}...</p>
+                    <p class="text-xs text-gray-400 mt-2">บันทึกเมื่อ: ${new Date(doc.createdAt).toLocaleString('th-TH')}</p>
+                `;
+                searchResults.appendChild(el);
+            });
+        }
+        
+        // --- Category Filter Logic (Feature 6.3) ---
+        categoryFilterButtons.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON') return;
+            
+            // Update state
+            activeCategoryFilter = e.target.dataset.category;
+            
+            // Update styles
+            categoryFilterButtons.querySelectorAll('button').forEach(btn => {
+                btn.classList.remove('active', 'bg-emerald-600', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+            });
+            e.target.classList.add('active', 'bg-emerald-600', 'text-white');
+            e.target.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+            
+            // Trigger search
+            searchDocuments();
+        });
+
+
+        // --- Event Listeners Setup (OCR Tab) ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('bg-emerald-100', 'border-emerald-500');
+        });
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('bg-emerald-100', 'border-emerald-500');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('bg-emerald-100', 'border-emerald-500');
+            const files = e.dataTransfer.files;
+            // (EDIT 20) Pass the whole FileList
+            if (files.length > 0) handleFileSelect(files);
+        });
+        fileInput.addEventListener('change', (e) => {
+            // (EDIT 21) Pass the whole FileList
+            if (e.target.files.length > 0) handleFileSelect(e.target.files);
+        });
+        
+        ocrButton.addEventListener('click', performOCR);
+        copyButton.addEventListener('click', copyToClipboard);
+        aiClassifyButton.addEventListener('click', callGeminiForClassification);
+        saveButton.addEventListener('click', saveDocument);
+        searchButton.addEventListener('click', searchDocuments);
+
+        // --- Utility ---
+        function copyToClipboard() {
+            ocrResult.select();
+            try {
+                document.execCommand('copy');
+                copyButton.textContent = 'คัดลอกแล้ว!';
+                setTimeout(() => { copyButton.textContent = 'คัดลอกข้อความ'; }, 2000);
+            } catch (err) {
+                console.error('ไม่สามารถคัดลอกข้อความได้: ', err);
+            }
+        }
+
+    </script>
+
+</body>
+</html>
+
+
